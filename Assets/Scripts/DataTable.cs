@@ -1,11 +1,10 @@
-﻿// ReSharper disable InconsistentNaming
-using System;
+﻿// ReSharper disable UnassignedField.Global
+// ReSharper disable CollectionNeverUpdated.Global
 using System.Collections.Generic;
 
-[Serializable]
 public struct DataTable
 {
     public string Title;
     public List<string> ColumnHeaders;
-    public List<User> Data;
+    public List<Dictionary<string, string>> Data;
 }

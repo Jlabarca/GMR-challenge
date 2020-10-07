@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Text;
-using System.Text.RegularExpressions;
+using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -43,8 +43,7 @@ public class DynamicDataTable : MonoBehaviour
         try
         {
             string dataAsJson = File.ReadAllText(filePath, Encoding.UTF8);
-            dataAsJson = CleanJsonInput(dataAsJson);
-            return JsonUtility.FromJson<DataTable>(dataAsJson);
+            return JsonConvert.DeserializeObject<DataTable>(dataAsJson);
         }
         catch (Exception e)
         {
@@ -52,15 +51,6 @@ public class DynamicDataTable : MonoBehaviour
         }
 
         return null;
-    }
-
-    /*
-     * Remove all trailing commas
-     * It's required because we are using Unity´s JsonUtility and it only works on a 'clean' json format
-     */
-    private static string CleanJsonInput(string json)
-    {
-        return Regex.Replace(json, @"\,(?=\s*?[\}\]])", string.Empty);
     }
 
     #endregion
@@ -108,22 +98,15 @@ public class DynamicDataTable : MonoBehaviour
         return (titleTransform, gridTransform, headerTransform);
     }
 
-    /// <summary>
-    /// Cell text values are extracted using reflection and casted as string
-    /// It could support different types of data elements
-    /// </summary>
     private void BuildRowsAndCells(DataTable dataTable, Transform gridTransform)
     {
-        foreach (var element in dataTable.Data)
+        foreach (var dictionary in dataTable.Data)
         {
             var rowGameObject = Instantiate(rowPrefab, gridTransform);
             foreach (var header in dataTable.ColumnHeaders)
             {
-                var textContent = string.Empty;
-                var fieldInfo = element.GetType().GetField(header);
-                if (fieldInfo != null)
-                    textContent = fieldInfo.GetValue(element) as string;
-                InstantiateText(textContent, rowGameObject.transform);
+                dictionary.TryGetValue(header, out var value);
+                InstantiateText(value, rowGameObject.transform);
             }
         }
     }
