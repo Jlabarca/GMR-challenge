@@ -8,6 +8,9 @@ using UnityEngine.UI;
 public class DynamicDataTable : MonoBehaviour
 {
     private const string FileName = "JsonChallenge.json";
+    private const string TitleGameObjectName = "Title";
+    private const string GridGameObjectName = "Grid";
+    private const string HeaderGameObjectName = "Header";
 
     [SerializeField]
     private GameObject dataTablePrefab;
@@ -16,9 +19,19 @@ public class DynamicDataTable : MonoBehaviour
     [SerializeField]
     private GameObject cellPrefab;
 
+    private FileSystemWatcher _fileSystemWatcher;
+    private GameObject _dataTableGameObject;
+    private bool _updateRequired;
+
     private void Start()
     {
-        string filePath = Path.Combine (Application.streamingAssetsPath, FileName);
+        ReadFileAndBuildDataTable();
+        AddFileWatcher();
+    }
+
+    private void ReadFileAndBuildDataTable()
+    {
+        var filePath = Path.Combine (Application.streamingAssetsPath, FileName);
         var dataTable = GetDataTableFromJsonFile(filePath);
         if (dataTable != null) BuildDataTableUi(dataTable.Value);
     }
@@ -27,15 +40,17 @@ public class DynamicDataTable : MonoBehaviour
 
     private static DataTable? GetDataTableFromJsonFile(string filePath)
     {
-        if (File.Exists(filePath))
+        try
         {
             string dataAsJson = File.ReadAllText(filePath, Encoding.UTF8);
             dataAsJson = CleanJsonInput(dataAsJson);
-            Debug.Log(dataAsJson);
             return JsonUtility.FromJson<DataTable>(dataAsJson);
         }
+        catch (Exception e)
+        {
+            Debug.LogError ($"Error reading {FileName}: {e}");
+        }
 
-        Debug.LogError ($"Missing file named {FileName} in StreamingAssets folder");
         return null;
     }
 
@@ -51,10 +66,6 @@ public class DynamicDataTable : MonoBehaviour
     #endregion
 
     #region Build UI datatable
-
-    private const string TitleGameObjectName = "Title";
-    private const string GridGameObjectName = "Grid";
-    private const string HeaderGameObjectName = "Header";
 
     private void BuildDataTableUi(DataTable dataTable)
     {
@@ -81,19 +92,18 @@ public class DynamicDataTable : MonoBehaviour
 
     private (Transform titleTransform, Transform gridTransform, Transform headerTransform) CheckPrefabStructure()
     {
-        var dataTableGameObject = Instantiate(dataTablePrefab, transform);
+        Destroy(_dataTableGameObject);
 
-        var titleTransform = dataTableGameObject.transform.Find(TitleGameObjectName);
+        _dataTableGameObject = Instantiate(dataTablePrefab, transform);
 
+        var titleTransform = _dataTableGameObject.transform.Find(TitleGameObjectName);
         if (titleTransform == null) Debug.LogWarning($"DataTable Prefab doesn't have a child called {TitleGameObjectName}");
 
-        var gridTransform = dataTableGameObject.transform.Find(GridGameObjectName);
-
+        var gridTransform = _dataTableGameObject.transform.Find(GridGameObjectName);
         if (gridTransform == null) throw new Exception($"DataTable Prefab doesn't have a child called {GridGameObjectName}");
 
         var headerTransform = gridTransform.Find(HeaderGameObjectName);
-
-        if (gridTransform == null) throw new Exception($"Grid doesn't have a child called {HeaderGameObjectName}");
+        if (headerTransform == null) throw new Exception($"{GridGameObjectName} doesn't have a child called {HeaderGameObjectName}");
 
         return (titleTransform, gridTransform, headerTransform);
     }
@@ -124,6 +134,42 @@ public class DynamicDataTable : MonoBehaviour
         var text = cellGameObject.GetComponent<Text>();
         text.text = textContent;
         if(bold) text.fontStyle = FontStyle.Bold;
+    }
+
+    #endregion
+
+    #region File modification listener
+
+    private void AddFileWatcher()
+    {
+        _fileSystemWatcher = new FileSystemWatcher
+        {
+            Path = Application.streamingAssetsPath,
+            Filter = FileName,
+            NotifyFilter = NotifyFilters.LastWrite,
+            EnableRaisingEvents = true
+        };
+
+        _fileSystemWatcher.Changed += OnJsonFileModified;
+    }
+
+    private void OnJsonFileModified(object sender, FileSystemEventArgs e)
+    {
+        Debug.Log("DataTable: OnJsonFileModified - Applying new values");
+        _updateRequired = true;
+    }
+
+    private void Update()
+    {
+        if (!_updateRequired) return;
+        _updateRequired = false;
+        ReadFileAndBuildDataTable();
+    }
+
+    public void OnDestroy()
+    {
+        _fileSystemWatcher?.Dispose();
+        _fileSystemWatcher = null;
     }
 
     #endregion
